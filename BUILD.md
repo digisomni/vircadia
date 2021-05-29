@@ -107,7 +107,6 @@ RELEASE_NUMBER
 // The release name, e.g., Eos.
 RELEASE_NAME
 // The build commit, e.g., use a Git hash for the most recent commit in the branch - fd6973b.
-
 BUILD_NUMBER
 
 // The type of release.
@@ -122,6 +121,9 @@ PRELOADED_SCRIPT_WHITELIST=ListOfEntries
 // Code-signing environment variables must be set during runtime of CMake AND globally when the signing takes place.
 HF_PFX_FILE=Path to certificate
 HF_PFX_PASSPHRASE=Passphrase for certificate
+
+// Domain server upgrader
+RELEASE_REPOSITORY=URL to the .JSON file with versions and download links for packages.
 
 // Determine the build type
 PRODUCTION_BUILD=0|1

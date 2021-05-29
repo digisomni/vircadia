@@ -56,6 +56,7 @@
 #include "DomainServerNodeData.h"
 #include "EntitiesBackupHandler.h"
 #include "NodeConnectionData.h"
+#include "DomainServerUpgrader.h"
 
 #include <Gzip.h>
 
@@ -434,7 +435,7 @@ DomainServer::~DomainServer() {
         _contentManager->aboutToFinish();
         _contentManager->terminate();
     }
-    
+
     if (_httpMetadataExporterManager) {
         _httpMetadataExporterManager->close();
         delete _httpMetadataExporterManager;
@@ -2026,8 +2027,11 @@ QString DomainServer::pathForRedirect(QString path) const {
 const QString URI_OAUTH = "/oauth";
 bool DomainServer::handleHTTPRequest(HTTPConnection* connection, const QUrl& url, bool skipSubHandler) {
     const QString JSON_MIME_TYPE = "application/json";
+    const QString TEXT_MIME_TYPE = "text/plain";
 
     const QString URI_ID = "/id";
+    const QString URI_WIZARD = "/wizard/";
+    const QString URI_AUTOMATIC_UPGRADE = "/upgrade";
     const QString URI_ASSIGNMENT = "/assignment";
     const QString URI_NODES = "/nodes";
     const QString URI_SETTINGS = "/settings";
@@ -2123,7 +2127,6 @@ bool DomainServer::handleHTTPRequest(HTTPConnection* connection, const QUrl& url
 
     // Check if we should redirect/prevent access to the wizard
     if (connection->requestOperation() == QNetworkAccessManager::GetOperation) {
-        const QString URI_WIZARD = "/wizard/";
         const QString WIZARD_COMPLETED_ONCE_KEY_PATH = "wizard.completed_once";
         QVariant wizardCompletedOnce = _settingsManager.valueForKeyPath(WIZARD_COMPLETED_ONCE_KEY_PATH);
         const bool completedOnce = wizardCompletedOnce.isValid() && wizardCompletedOnce.toBool();
@@ -2192,6 +2195,40 @@ bool DomainServer::handleHTTPRequest(HTTPConnection* connection, const QUrl& url
             connection->respond(HTTPConnection::StatusCode200, assignmentDocument.toJson(), qPrintable(JSON_MIME_TYPE));
 
             // we've processed this request
+            return true;
+        } else if (url.path() == URI_AUTOMATIC_UPGRADE) {
+            QUrl repoURL{ BuildInfo::RELEASE_REPOSITORY };
+            auto upgrader = new DomainServerUpgrader (repoURL, this);
+
+            connect(upgrader, &DomainServerUpgrader::downloaded,
+                [connection](QByteArray downloadedData) {
+                    QJsonDocument repoDoc = QJsonDocument::fromJson(downloadedData);
+
+                    QJsonObject repoJSON, platform;
+                    repoJSON = repoDoc.object();
+                    platform = repoJSON["ubuntu"].toObject();
+
+                    // TODO: do a semver check.
+                    // TODO: setup PKI w/ script to install.
+                    QJsonValue latest = platform.value("latest");
+                    qDebug() << "Test $$$$$$$$$$$$$$" << latest;
+
+                    connection->respond(HTTPConnection::StatusCode200);
+                }
+            );
+
+            connect(upgrader, &DomainServerUpgrader::error,
+                [connection, TEXT_MIME_TYPE](QString errorString) {
+                    connection->respond(HTTPConnection::StatusCode500, errorString.toUtf8(), qPrintable(TEXT_MIME_TYPE));
+                }
+            );
+
+            connect(upgrader, &DomainServerUpgrader::finished,
+                [upgrader]() {
+                    upgrader->deleteLater();
+                }
+            );
+
             return true;
         } else if (url.path() == "/transactions.json") {
             // enumerate our pending transactions and display them in an array
@@ -3150,9 +3187,9 @@ void DomainServer::initializeExporter() {
         qCInfo(domain_server) << "Starting Prometheus exporter on port " << exporterPort;
         _httpExporterManager = new HTTPManager
         (
-            QHostAddress::Any, 
-            (quint16)exporterPort, 
-            QString("%1/resources/prometheus_exporter/").arg(QCoreApplication::applicationDirPath()), 
+            QHostAddress::Any,
+            (quint16)exporterPort,
+            QString("%1/resources/prometheus_exporter/").arg(QCoreApplication::applicationDirPath()),
             &_exporter
         );
     }
@@ -3176,9 +3213,9 @@ void DomainServer::initializeMetadataExporter() {
         qCInfo(domain_server) << "Starting Metadata exporter on port" << metadataExporterPort;
         _httpMetadataExporterManager = new HTTPManager
         (
-            QHostAddress::Any, 
-            (quint16)metadataExporterPort, 
-            QString("%1/resources/metadata_exporter/").arg(QCoreApplication::applicationDirPath()), 
+            QHostAddress::Any,
+            (quint16)metadataExporterPort,
+            QString("%1/resources/metadata_exporter/").arg(QCoreApplication::applicationDirPath()),
             _metadata
         );
     }
@@ -3800,7 +3837,7 @@ void DomainServer::screensharePresence(QString roomname, QUuid avatarID, int exp
     callbackParams.jsonCallbackMethod = "handleSuccessfulScreensharePresence";
     callbackParams.errorCallbackMethod = "handleFailedScreensharePresence";
     // Construct `callbackData`, which is data that will be available to the callback functions.
-    // In this case, the "success" callback needs access to the "roomname" (the zone ID) and the 
+    // In this case, the "success" callback needs access to the "roomname" (the zone ID) and the
     // relevant avatar's UUID.
     QJsonObject callbackData;
     callbackData.insert("roomname", roomname);
