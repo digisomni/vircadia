@@ -1,4 +1,8 @@
 set(TARGET_NAME entities-renderer)
+# Fix up the rpath so macdeployqt works
+if (APPLE)
+  set_target_properties(${TARGET_NAME} PROPERTIES INSTALL_RPATH "@executable_path/../Frameworks")
+endif ()
 setup_hifi_library(Network Script)
 link_hifi_libraries(shared workload gpu shaders procedural graphics material-networking model-networking script-engine render render-utils image qml ui pointers)
 include_hifi_library_headers(networking)

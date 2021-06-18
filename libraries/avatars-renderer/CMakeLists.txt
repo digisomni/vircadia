@@ -1,4 +1,8 @@
 set(TARGET_NAME avatars-renderer)
+# Fix up the rpath so macdeployqt works
+if (APPLE)
+  set_target_properties(${TARGET_NAME} PROPERTIES INSTALL_RPATH "@executable_path/../Frameworks")
+endif ()
 setup_hifi_library(Network Script)
 link_hifi_libraries(shared shaders gpu graphics animation material-networking model-networking script-engine render render-utils image entities-renderer physics)
 include_hifi_library_headers(avatars)
