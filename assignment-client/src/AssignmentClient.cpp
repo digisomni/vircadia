@@ -33,6 +33,7 @@
 
 #include <Trace.h>
 #include <StatTracker.h>
+#include <ThreadHelpers.h>
 
 #include "AssignmentClientLogging.h"
 #include "AssignmentFactory.h"
@@ -118,8 +119,10 @@ AssignmentClient::AssignmentClient(Assignment::Type requestAssignmentType, QStri
         setUpStatusToMonitor();
     }
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
-    packetReceiver.registerListener(PacketType::CreateAssignment, this, "handleCreateAssignmentPacket");
-    packetReceiver.registerListener(PacketType::StopNode, this, "handleStopNodePacket");
+    packetReceiver.registerListener(PacketType::CreateAssignment,
+        PacketReceiver::makeUnsourcedListenerReference<AssignmentClient>(this, &AssignmentClient::handleCreateAssignmentPacket));
+    packetReceiver.registerListener(PacketType::StopNode,
+        PacketReceiver::makeUnsourcedListenerReference<AssignmentClient>(this, &AssignmentClient::handleStopNodePacket));
 }
 
 void AssignmentClient::stopAssignmentClient() {
@@ -233,10 +236,13 @@ void AssignmentClient::handleCreateAssignmentPacket(QSharedPointer<ReceivedMessa
         qCDebug(assignment_client) << "Destination IP for assignment is" << nodeList->getDomainHandler().getIP().toString();
 
         // start the deployed assignment
-        QThread* workerThread = new QThread;
+        QThread* workerThread = new QThread();
         workerThread->setObjectName("ThreadedAssignment Worker");
 
-        connect(workerThread, &QThread::started, _currentAssignment.data(), &ThreadedAssignment::run);
+        connect(workerThread, &QThread::started, _currentAssignment.data(), [this] {
+            setThreadName("ThreadedAssignment Worker");
+            _currentAssignment->run();
+        });
 
         // Once the ThreadedAssignment says it is finished - we ask it to deleteLater
         // This is a queued connection so that it is put into the event loop to be processed by the worker

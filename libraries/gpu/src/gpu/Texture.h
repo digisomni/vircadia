@@ -571,16 +571,19 @@ public:
     void setExternalRecycler(const ExternalRecycler& recycler);
     ExternalRecycler getExternalRecycler() const;
 
+    bool getImportant() const { return _important; }
+    void setImportant(bool important) { _important = important; }
+
     const GPUObjectPointer gpuObject {};
 
     ExternalUpdates getUpdates() const;
 
     // Serialize a texture into a KTX file
-    static ktx::KTXUniquePointer serialize(const Texture& texture);
+    static ktx::KTXUniquePointer serialize(const Texture& texture, const glm::ivec2& originalSize);
 
-    static TexturePointer build(const ktx::KTXDescriptor& descriptor);
-    static TexturePointer unserialize(const std::string& ktxFile);
-    static TexturePointer unserialize(const cache::FilePointer& cacheEntry, const std::string& source = std::string());
+    static std::pair<TexturePointer, glm::ivec2> build(const ktx::KTXDescriptor& descriptor);
+    static std::pair<TexturePointer, glm::ivec2> unserialize(const std::string& ktxFile);
+    static std::pair<TexturePointer, glm::ivec2> unserialize(const cache::FilePointer& cacheEntry, const std::string& source = std::string());
 
     static bool evalKTXFormat(const Element& mipFormat, const Element& texelFormat, ktx::Header& header);
     static bool evalTextureFormat(const ktx::Header& header, Element& mipFormat, Element& texelFormat);
@@ -632,6 +635,7 @@ protected:
     bool _autoGenerateMips = false;
     bool _isIrradianceValid = false;
     bool _defined = false;
+    bool _important = false;
    
     static TexturePointer create(TextureUsageType usageType, Type type, const Element& texelFormat, uint16 width, uint16 height, uint16 depth, uint16 numSamples, uint16 numSlices, uint16 numMips, const Sampler& sampler);
 
